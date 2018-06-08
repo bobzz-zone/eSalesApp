@@ -11,19 +11,7 @@ from base import validate_method
 from erpnext.hr.doctype.leave_block_list.leave_block_list import get_applicable_block_dates
 from erpnext.hr.doctype.leave_application.leave_application import get_number_of_leave_days, is_lwp, get_leave_balance_on
 from frappe.utils import cint, date_diff, flt, getdate, formatdate, get_fullname
-import re
 
-LIMIT_PAGE = 20
-
-#HELPER
-def distinct(seen, new_list):
-	temp_seen = seen
-	result_list = []
-	for nl in new_list:
-		if not nl['name'] in temp_seen:
-			result_list.append(nl)
-			temp_seen += nl['name'] + ";"
-	return (temp_seen, result_list)
 
 #VALIDATION METHOD
 def validate_dates_acorss_allocation(employee, leave_type, from_date, to_date):
@@ -268,22 +256,16 @@ def get_metadata(employee='%',company='',approver='%'):
 			dataCount[stat] = firstFetch[0]
 
 	#sales order
-
 	status = ['Draft', 'To Deliver and Bill','To Bill','To Deliver','Completed','Cancelled','Closed']
-
-	
-
 	data['sales_order'] = dict()
 	dataSO = data['sales_order']
 	dataSO['count'] = dict()
 	dataCount = dataSO['count']
 	for stat in status:
-		fetch = frappe.get_list("Sales Order", 
-							filters = 
-							{
-								"status": stat
-							})
-		dataCount[stat] = len(fetch)
+		fetch = frappe.db.sql("SELECT COUNT(name) FROM `tabSales Order` WHERE owner = '{}' AND status='{}' ORDER BY modified".format(user, stat),as_list=1)
+		if (len(fetch) > 0):
+			firstFetch = fetch[0]
+			dataCount[stat] = firstFetch[0]
 
 	#invoice
 	status = ['Overdue','Unpaid','Paid']
@@ -292,13 +274,10 @@ def get_metadata(employee='%',company='',approver='%'):
 	dataINV['count'] = dict()
 	dataCount = dataINV['count']
 	for stat in status:
-		fetch = frappe.get_list("Sales Invoice", 
-							filters = 
-							{
-								"status": stat
-							})
-		dataCount[stat] = len(fetch)
-			
+		fetch = frappe.db.sql("SELECT COUNT(name) FROM `tabSales Invoice` WHERE owner = '{}' AND status='{}' ORDER BY modified".format(user, stat),as_list=1)
+		if (len(fetch) > 0):
+			firstFetch = fetch[0]
+			dataCount[stat] = firstFetch[0]
 
 	#lead
 	status = ['Lead','Open','Replied','Opportunity','Interested','Quotation','Lost Quotation','Converted','Do Not Contact']
@@ -307,19 +286,17 @@ def get_metadata(employee='%',company='',approver='%'):
 	dataLead['count'] = dict()
 	dataCount = dataLead['count']
 	for stat in status:
-		fetch = frappe.get_list("Lead", 
-							filters = 
-							{
-								"status": stat
-							})
-		dataCount[stat] = len(fetch)
+		fetch = frappe.db.sql("SELECT COUNT(name) FROM `tabLead` WHERE owner = '{}' AND status='{}' ORDER BY modified".format(user, stat),as_list=1)
+		if (len(fetch) > 0):
+			firstFetch = fetch[0]
+			dataCount[stat] = firstFetch[0]
 
-	dataCount['Quotation'] += len(frappe.get_list("Quotation",filters = {"status": ("IN", ['Submitted','Open']),"quotation_to": "Customer"}))
-	dataCount['Converted'] += len(frappe.get_list("Quotation",filters = {"status": "Ordered","quotation_to": "Customer"}))
-	dataCount['Opportunity'] += len(frappe.get_list("Opportunity",filters = {"status": "Open","enquiry_from": "Customer"}))
+	dataCount['Quotation'] += len(frappe.db.sql("SELECT name FROM `tabQuotation` WHERE owner = '{}' AND (status = 'Submitted' OR status='Open') AND quotation_to = 'Customer'".format(user),as_dict=1))
+	dataCount['Converted'] += len(frappe.db.sql("SELECT * FROM `tabQuotation` WHERE owner = '{}' AND status = 'Ordered' AND quotation_to = 'Customer'".format(user),as_dict=1))
+	dataCount['Opportunity'] += len(frappe.db.sql("SELECT * FROM `tabOpportunity` WHERE owner = '{}' AND (status != 'Converted' AND status != 'Lost' AND status != 'Quotation') AND enquiry_from = 'Customer'".format(user),as_dict=1))
 
 	#net sales
-	fetchNetSales = frappe.db.sql("SELECT SUM(grand_total) as net_sales,DATE_FORMAT(creation, '%e %M %Y') as posting_date FROM `tabSales Order` WHERE docstatus != 2 GROUP BY DATE_FORMAT(creation, '%e %M %Y') ORDER BY DATE_FORMAT(creation, '%e %M %Y') DESC LIMIT 7",as_dict=1)
+	fetchNetSales = frappe.db.sql("SELECT SUM(grand_total) as net_sales,DATE_FORMAT(creation, '%e %M %Y') as posting_date FROM `tabSales Order` WHERE owner='{}' AND docstatus != 2 GROUP BY DATE_FORMAT(creation, '%e %M %Y') ORDER BY DATE_FORMAT(creation, '%e %M %Y') DESC LIMIT 7".format(user),as_dict=1)
 	data['daily_net_sales'] = fetchNetSales
 
 	return data
@@ -402,78 +379,6 @@ def request_leave_application(employee='',company='',leave_type='', from_date=''
 
 @frappe.whitelist(allow_guest=False)
 def get_leave_application(leave_approver='%',filter_requested='all',employee='%',company='',status='',query='',sort='',page=0):
-	# seen = ""
-	# data = []
-	
-	# statuses = status.split(',')
-	# filters = ['name','leave_type','employee_name']
-
-	# for f in filters:
-	# 	data_filter = []
-	# 	if filter_requested == 'me':
-	# 		data_filter = frappe.get_list("Leave Application", 
-	# 							fields="*", 
-	# 							filters = 
-	# 							{
-	# 								"status": ("IN", statuses),
-	# 								"company": company,
-	# 								"employee": ("LIKE", employee),
-	# 								f: ("LIKE", "%{}%".format(query))
-	# 							},
-	# 							order_by=sort,
-	# 							limit_page_length=LIMIT_PAGE,
-	# 							limit_start=page)
-	# 	elif filter_requested == 'other':
-	# 		data_filter = frappe.get_list("Leave Application", 
-	# 							fields="*", 
-	# 							filters = 
-	# 							{
-	# 								"status": ("IN", statuses),
-	# 								"company": company,
-	# 								"leave_approver": ("LIKE", leave_approver),
-	# 								f: ("LIKE", "%{}%".format(query))
-	# 							},
-	# 							order_by=sort,
-	# 							limit_page_length=LIMIT_PAGE,
-	# 							limit_start=page)
-	# 	else:
-	# 		data_filter_me = frappe.get_list("Leave Application", 
-	# 							fields="*", 
-	# 							filters = 
-	# 							{
-	# 								"status": ("IN", statuses),
-	# 								"company": company,
-	# 								"employee": ("LIKE", employee),
-	# 								f: ("LIKE", "%{}%".format(query))
-	# 							},
-	# 							order_by=sort,
-	# 							limit_page_length=LIMIT_PAGE,
-	# 							limit_start=page)
-	# 		data_filter_other = frappe.get_list("Leave Application", 
-	# 							fields="*", 
-	# 							filters = 
-	# 							{
-	# 								"status": ("IN", statuses),
-	# 								"company": company,
-	# 								"leave_approver": ("LIKE", leave_approver),
-	# 								f: ("LIKE", "%{}%".format(query))
-	# 							},
-	# 							order_by=sort,
-	# 							limit_page_length=LIMIT_PAGE,
-	# 							limit_start=page)
-	# 		temp_seen, result_list = distinct(seen, data_filter_me)
-	# 		seen = temp_seen
-	# 		data_filter.extend(result_list)
-
-	# 		temp_seen, result_list = distinct(seen, data_filter_other)
-	# 		seen = temp_seen
-	# 		data_filter.extend(result_list)
-
-	# 	temp_seen, result_list = distinct(seen,data_filter)
-	# 	seen = temp_seen
-	# 	data.extend(result_list)
-	# return data
-
 	filters = ['name','leave_type','employee_name']
 	n_filters = len(filters)
 	generate_filters = ""
@@ -687,63 +592,58 @@ def get_employee_advance(owner='%',employee='%', company='', status='',query='',
 		 
 	return data
 
-# ========================================================SALES ORDER====================================================
-
 @frappe.whitelist(allow_guest=False)
 def get_sales_order(status='',query='',sort='',page=0):
-	seen = ""
-	data = []
-	
-	statuses = status.split(',')
-	filters = ["name", "customer_name"]
+	user = frappe.session.user
+	filters = ['name','customer_name']
+	n_filters = len(filters)
+	generate_filters = ""
+	for i in range(0,n_filters-1):
+		generate_filters += "{} LIKE '%{}%' OR ".format(filters[i],query)
+	generate_filters += "{} LIKE '%{}%' ".format(filters[n_filters-1],query)
 
-	for f in filters:
-		data_filter = frappe.get_list("Sales Order", 
-							fields="*", 
-							filters = 
-							{
-								"docstatus": 1,
-								"status": ("IN", statuses),
-								f: ("LIKE", "%{}%".format(query))
-							},
-							order_by=sort,
-							limit_page_length=LIMIT_PAGE,
-							limit_start=page)
-		temp_seen, result_list = distinct(seen,data_filter)
-		seen = temp_seen
-		data.extend(result_list)
+	statuses = status.split(',')
+	generate_status = "'" + "','".join(statuses) + "'"
+
+	sortedby = 'modified'
+	if (sort != ''):
+		sortedby = sort
+
+	# data = frappe.get_list("Sales Order", 
+	# 						fields="*", 
+	# 						filters = 
+	# 						{
+	# 							"docstatus": 1,
+	# 							"status": ("IN", statuses),
+	# 							"name": ("LIKE", "%" + query + "%")
+	# 							# "customer_name": ("LIKE","%" +query + "%")
+	# 						})
+	data = frappe.db.sql("SELECT * FROM `tabSales Order` WHERE docstatus = 1 AND status IN ({}) AND ({}) ORDER BY {} DESC, status ASC LIMIT 20 OFFSET {}".format(generate_status,generate_filters,sortedby,page),as_dict=1)
 	return data
 
 @frappe.whitelist(allow_guest=False)
 def validate_sales_order(items):
 	return validate_warehouse(items)
 
-
-# ========================================================SALES INVOICE====================================================
-
 @frappe.whitelist(allow_guest=False)
 def get_sales_invoice(status='',query='',sort='',page=0):
-	seen = ""
-	data = []
-	
-	statuses = status.split(',')
-	filters = ["name", "customer_name"]
+	user = frappe.session.user
+	filters = ['name','customer_name']
+	n_filters = len(filters)
+	generate_filters = ""
+	for i in range(0,n_filters-1):
+		generate_filters += "{} LIKE '%{}%' OR ".format(filters[i],query)
+	generate_filters += "{} LIKE '%{}%' ".format(filters[n_filters-1],query)
 
-	for f in filters:
-		data_filter = frappe.get_list("Sales Invoice", 
-							fields="*", 
-							filters = 
-							{
-								"docstatus": 1,
-								"status": ("IN", statuses),
-								f: ("LIKE", "%{}%".format(query))
-							},
-							order_by=sort,
-							limit_page_length=LIMIT_PAGE,
-							limit_start=page)
-		temp_seen, result_list = distinct(seen,data_filter)
-		seen = temp_seen
-		data.extend(result_list)
+	statuses = status.split(',')
+	generate_status = "'" + "','".join(statuses) + "'"
+
+	sortedby = 'modified'
+	if (sort != ''):
+		sortedby = sort
+
+	data = frappe.db.sql("SELECT * FROM `tabSales Invoice` WHERE docstatus = 1 AND owner = '{}' AND status IN ({}) AND ({}) ORDER BY {} DESC, status ASC LIMIT 20 OFFSET {}".format(user,generate_status,generate_filters,sortedby,page),as_dict=1)
+
 	return data
 
 @frappe.whitelist(allow_guest=False)
@@ -757,89 +657,45 @@ def get_item(is_sales_item='1',is_stock_item='1',ref='',page='0'):
 			row['product_bundle_item'] = fetchBundleItem
 	return data
 
-
-# ========================================================OFFER====================================================
-
 @frappe.whitelist(allow_guest=False)
 def get_lead(status='',query='',sort='',page=0):
-	data = dict()
-	
-	#lead
+	user = frappe.session.user
 	statuses = status.split(',')
-	filters = ['name','company_name','lead_name','email_id']
+	generate_status = "'" + "','".join(statuses) + "'"
 
-	seen_leads = ""
-	data['leads'] = []
-	for f in filters:
-		data_filter = frappe.get_list("Lead", 
-							fields="*", 
-							filters = 
-							{
-								"status": ("IN", statuses),
-								f: ("LIKE", "%{}%".format(query))
-							},
-							order_by=sort,
-							limit_page_length=LIMIT_PAGE,
-							limit_start=page)
-		temp_seen_leads, result_list = distinct(seen_leads,data_filter)
-		seen_leads = temp_seen_leads
-		data['leads'].extend(result_list)
-	
+	sortedby = 'modified'
+	if (sort != ''):
+		sortedby = sort
+
+	#lead
+	filters = ['name','company_name','lead_name','email_id']
+	n_filters = len(filters)
+	generate_filters = ""
+	for i in range(0,n_filters-1):
+		generate_filters += "{} LIKE '%{}%' OR ".format(filters[i],query)
+	generate_filters += "{} LIKE '%{}%' ".format(filters[n_filters-1],query)
+	data = dict()
+	data['leads'] = frappe.db.sql("SELECT * FROM `tabLead` WHERE owner = '{}' AND status IN ({}) AND ({}) ORDER BY {} DESC, status ASC LIMIT 20 OFFSET {}".format(user, generate_status,generate_filters,sortedby,page),as_dict=1)
 
 	#quotation
+	filters = ['name','customer_name','contact_email']
+	n_filters = len(filters)
+	generate_filters = ""
+	for i in range(0,n_filters-1):
+		generate_filters += "{} LIKE '%{}%' OR ".format(filters[i],query)
+	generate_filters += "{} LIKE '%{}%' ".format(filters[n_filters-1],query)
+
 	if 'Quotation' in statuses:
-		quotation_statuses = ['Submitted', 'Open']
+		data['quotations'] = frappe.db.sql("SELECT * FROM `tabQuotation` WHERE owner = '{}' AND (status = 'Submitted' OR status='Open') AND quotation_to = 'Customer' AND ({}) ORDER BY {} DESC, status ASC LIMIT 20 OFFSET {}".format(user, generate_filters,sortedby,page),as_dict=1)
 	elif 'Converted' in statuses:
-		quotation_statuses = ['Ordered']
+		data['quotations'] = frappe.db.sql("SELECT * FROM `tabQuotation` WHERE owner = '{}' AND status = 'Ordered' AND quotation_to = 'Customer' AND ({}) ORDER BY {} DESC, status ASC LIMIT 20 OFFSET {}".format(user, generate_filters,sortedby,page),as_dict=1)
 	else:
-		quotation_statuses = []
-
-
-	data['quotations'] = []
-	if len(quotation_statuses) > 0:
-		filters = ['name','customer_name','contact_email']
-
-		seen_quotations = ""
-		for f in filters:
-			data_filter = frappe.get_list("Quotation", 
-								fields="*", 
-								filters = 
-								{
-									"status": ("IN", quotation_statuses),
-									"quotation_to": "Customer",
-									f: ("LIKE", "%{}%".format(query))
-								},
-								order_by=sort,
-								limit_page_length=LIMIT_PAGE,
-								limit_start=page)
-			temp_seen_quotations, result_list = distinct(seen_quotations,data_filter)
-			seen_quotations = temp_seen_quotations
-			data['quotations'].extend(result_list)
-
+		data['quotations'] = list("")
 
 	#opportunity
-	data['opportunities'] = []
 	if 'Opportunity' in statuses:
-		opportunity_statuses = ['Open']
-		filters = ['name','customer_name','contact_email']
-
-		seen_opportunities = ""
-		for f in filters:
-			data_filter = frappe.get_list("Opportunity", 
-								fields="*", 
-								filters = 
-								{
-									"status": ("IN", opportunity_statuses),
-									"enquiry_from": "Customer",
-									f: ("LIKE", "%{}%".format(query))
-								},
-								order_by=sort,
-								limit_page_length=LIMIT_PAGE,
-								limit_start=page)
-			temp_seen_opportunities, result_list = distinct(seen_opportunities,data_filter)
-			seen_opportunities = temp_seen_opportunities
-			data['opportunities'].extend(result_list)
-
+		data['opportunities'] = frappe.db.sql("SELECT * FROM `tabOpportunity` WHERE owner = '{}' AND status != 'Converted' AND status != 'Lost' AND status != 'Quotation' AND enquiry_from = 'Customer' AND ({}) ORDER BY {} DESC, status ASC LIMIT 20 OFFSET {}".format(user, generate_filters,sortedby,page),as_dict=1)
+	# data['query'] = "SELECT * FROM `tabOpportunity` WHERE owner = '{}' AND status != 'Converted' AND status != 'Lost' AND status != 'Quotation' AND enquiry_from = 'Customer' AND ({}) ORDER BY {} DESC, status ASC LIMIT 20 OFFSET {}".format(user, generate_filters,sortedby,page)
 	return data
 
 @frappe.whitelist(allow_guest=False)
