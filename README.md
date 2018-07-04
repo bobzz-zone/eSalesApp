@@ -1,6 +1,6 @@
-## Sales Next
+## Next Sales
 
-This API Connector is use by Sales Next Application on Android Google Playstore.
+This API Connector is use by Next Sales Application on Android Google Playstore.
 
 You must install this app into your frappe / erpnext using bench
 More information about frappe bench [click here](https://github.com/frappe/bench)
