@@ -14,6 +14,7 @@ from frappe.utils import cint, date_diff, flt, getdate, formatdate, get_fullname
 import re
 
 LIMIT_PAGE = 20
+API_VERSION = 1.0
 
 #HELPER
 def distinct(seen, new_list):
@@ -207,6 +208,13 @@ def me():
 def ping():
 	return "pong"
 
+@frappe.whitelist(allow_guest=True)
+def sales_force_validate():
+	data = dict()
+
+	data["api_version"] = API_VERSION
+	return data
+
 # USER PERMISSION
 @frappe.whitelist(allow_guest=False)
 def get_user_permission():
@@ -319,7 +327,7 @@ def get_metadata(employee='%',company='',approver='%'):
 	dataCount['Opportunity'] += len(frappe.get_list("Opportunity",filters = {"status": "Open","enquiry_from": "Customer"}))
 
 	#net sales
-	fetchNetSales = frappe.db.sql("SELECT SUM(grand_total) as net_sales,DATE_FORMAT(creation, '%e %M %Y') as posting_date FROM `tabSales Order` WHERE docstatus != 2 GROUP BY DATE_FORMAT(creation, '%e %M %Y') ORDER BY DATE_FORMAT(creation, '%e %M %Y') DESC LIMIT 7",as_dict=1)
+	fetchNetSales = frappe.db.sql("SELECT SUM(grand_total) as net_sales,DATE_FORMAT(transaction_date, '%e %b %Y') as posting_date FROM `tabSales Order` WHERE docstatus != 2 GROUP BY transaction_date ORDER BY transaction_date DESC LIMIT 7",as_dict=1)
 	data['daily_net_sales'] = fetchNetSales
 
 	return data
