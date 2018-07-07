@@ -14,7 +14,7 @@ from frappe.utils import cint, date_diff, flt, getdate, formatdate, get_fullname
 import re
 
 LIMIT_PAGE = 20
-API_VERSION = 1.0
+API_VERSION = "1.0.1"
 
 #HELPER
 def distinct(seen, new_list):
@@ -325,12 +325,21 @@ def get_metadata(employee='%',company='',approver='%'):
 	dataCount['Quotation'] += len(frappe.get_list("Quotation",filters = {"status": ("IN", ['Submitted','Open']),"quotation_to": "Customer"}))
 	dataCount['Converted'] += len(frappe.get_list("Quotation",filters = {"status": "Ordered","quotation_to": "Customer"}))
 	dataCount['Opportunity'] += len(frappe.get_list("Opportunity",filters = {"status": "Open","enquiry_from": "Customer"}))
+ 
+ 	
 
 	#net sales
-	fetchNetSales = frappe.db.sql("SELECT SUM(grand_total) as net_sales,DATE_FORMAT(transaction_date, '%e %b %Y') as posting_date FROM `tabSales Order` WHERE docstatus != 2 GROUP BY transaction_date ORDER BY transaction_date DESC LIMIT 7",as_dict=1)
+	fetchNetSales = frappe.get_list("Sales Order", 
+									filters = {"status": ("IN", ["Open", "To Bill", "To Deliver", "To Deliver and Bill", "Completed"])},
+									fields = ["SUM(grand_total) as net_sales", "transaction_date as posting_date"],
+									order_by = "transaction_date DESC",
+									group_by = "transaction_date",
+									limit_page_length = 7
+								 )
 	data['daily_net_sales'] = fetchNetSales
 
 	return data
+
 
 # LEAVE APPLICATION
 @frappe.whitelist(allow_guest=False)
