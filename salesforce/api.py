@@ -14,7 +14,7 @@ from frappe.utils import cint, date_diff, flt, getdate, formatdate, get_fullname
 import re
 
 LIMIT_PAGE = 20
-API_VERSION = "1.0.1"
+API_VERSION = "1.1"
 
 #HELPER
 def distinct(seen, new_list):
@@ -337,6 +337,11 @@ def get_metadata(employee='%',company='',approver='%'):
 									limit_page_length = 7
 								 )
 	data['daily_net_sales'] = fetchNetSales
+
+
+	fetchPrintFormat = frappe.db.sql("SELECT name, doc_type FROM `tabPrint Format` WHERE disabled = 0",as_dict=1)
+
+	data["print_format"] = fetchPrintFormat
 
 	return data
 
@@ -705,7 +710,6 @@ def get_employee_advance(owner='%',employee='%', company='', status='',query='',
 	return data
 
 # ========================================================SALES ORDER====================================================
-
 @frappe.whitelist(allow_guest=False)
 def get_sales_order(status='',query='',sort='',page=0):
 	seen = ""
@@ -874,4 +878,28 @@ def get_user():
 	data = frappe.db.sql("SELECT * FROM `tabUser` WHERE name != 'Administrator'",as_dict=1)
 	return data
 
+
+# ========================================================WAREHOUSE====================================================
+@frappe.whitelist(allow_guest=False)
+def get_warehouse(company='',query='',sort='',page=0):
+	seen = ""
+	data = []
+	
+	filters = ["name", "warehouse_name", "city", "address_line_1","address_line_2"]
+
+	for f in filters:
+		data_filter = frappe.get_list("Warehouse", 
+							fields="*", 
+							filters = 
+							{
+								"company":company,
+								f: ("LIKE", "%{}%".format(query))
+							},
+							order_by=sort,
+							limit_page_length=LIMIT_PAGE,
+							limit_start=page)
+		temp_seen, result_list = distinct(seen,data_filter)
+		seen = temp_seen
+		data.extend(result_list)
+	return data
 
