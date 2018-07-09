@@ -881,6 +881,47 @@ def get_user():
 
 # ========================================================WAREHOUSE====================================================
 @frappe.whitelist(allow_guest=False)
+def check_item(item_code=''):
+
+	data = dict()
+	data_price_lists = frappe.get_list("Price List",
+										fields="*",
+										filters={
+											"selling":1,
+											"enabled":1
+										})
+	data_prices = []
+	for data_price_list in data_price_lists:
+		data_price = frappe.get_list("Item Price",
+										fields="price_list,price_list_rate",
+										filters={
+											"item_code":item_code,
+											"price_list":data_price_list["name"]
+										})
+		if (len(data_price) > 0):
+			data_prices.append(data_price[0])
+	data["item_price_list_rate"] = data_prices
+
+	data_warehouses = frappe.get_list("Warehouse",
+										fields="*",
+										filters={
+											"is_group":0
+										},
+										order_by="name")
+	data_stocks = []
+	for data_warehouse in data_warehouses:
+		data_stock = frappe.get_list("Bin",
+										fields="warehouse,actual_qty,projected_qty",
+										filters={
+											"item_code":item_code,
+											"warehouse": data_warehouse["name"]
+										})
+		if (len(data_stock) > 0):
+			data_stocks.append(data_stock[0])
+	data["warehouse_stocks"] = data_stocks
+	return data
+
+@frappe.whitelist(allow_guest=False)
 def get_warehouse(company='',query='',sort='',page=0):
 	seen = ""
 	data = []
@@ -892,6 +933,7 @@ def get_warehouse(company='',query='',sort='',page=0):
 							fields="*", 
 							filters = 
 							{
+								"is_group":0,
 								"company":company,
 								f: ("LIKE", "%{}%".format(query))
 							},
