@@ -14,7 +14,8 @@ from frappe.utils import cint, date_diff, flt, getdate, formatdate, get_fullname
 import re
 
 LIMIT_PAGE = 20
-API_VERSION = "1.1"
+API_VERSION = 1.1
+
 
 #HELPER
 def distinct(seen, new_list):

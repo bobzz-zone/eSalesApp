@@ -1,6 +1,12 @@
-## Next Sales
+## Next Sales v1.1
+Please always check for the update of your system when there's warning from the app by using git pull and reload the frappe
+```
+git pull
+sudo supervisorctl reload
+```
 
 This API Connector is use by Next Sales Application on Android Google Playstore.
+[app link download](https://play.google.com/store/apps/details?id=com.digitalasiasolusindo.nextsales)
 
 You must install this app into your frappe / erpnext using bench
 More information about frappe bench [click here](https://github.com/frappe/bench)
