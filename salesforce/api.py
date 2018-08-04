@@ -14,7 +14,7 @@ from frappe.utils import cint, date_diff, flt, getdate, formatdate, get_fullname
 import re
 
 LIMIT_PAGE = 20
-API_VERSION = 1.1
+API_VERSION = 1.2
 
 
 #HELPER
@@ -232,117 +232,133 @@ def get_user_permission():
 
 # METADATA
 @frappe.whitelist(allow_guest=False)
-def get_metadata(employee='%',company='',approver='%'):
+def get_metadata(employee='%',company='',approver='%',is_sales="0",is_employee="0"):
+
 	user = frappe.session.user
 	data = dict()
 
-	#daily net expense claim
-	fetchNetSales = frappe.db.sql("SELECT SUM(total_claimed_amount) as net_expense_claim, posting_date FROM `tabExpense Claim` WHERE employee LIKE '{}' AND company = '{}' AND approval_status='Approved' GROUP BY posting_date DESC LIMIT 7".format(employee,company),as_dict=1)
-	data['daily_net_expense_claim'] = fetchNetSales
+	#global
+	fetchCurrency = frappe.get_list("Currency",
+							fields="symbol,name",
+							order_by="name")
+	data['currency'] = fetchCurrency
+	if (is_employee == "1"):
 
-	#leave application
-	status = ["Open","Approved"]
-	data['leave_application'] = dict()
-	dataLA = data['leave_application']
-	dataLA['count'] = dict()
-	dataCount = dataLA['count']
-	for stat in status:
-		fetch = frappe.db.sql("SELECT COUNT(name) FROM `tabLeave Application` WHERE status='{}' AND employee LIKE '{}' AND company = '{}' ORDER BY modified".format(stat,employee,company),as_list=1)
-		if (len(fetch) > 0):
-			firstFetch = fetch[0]
-			dataCount[stat] = firstFetch[0]
+		#daily net expense claim
+		fetchExpenseClaim = frappe.get_list("Expense Claim", 
+										filters = {"employee": ("LIKE", employee)},
+										fields = "SUM(total_claimed_amount) as net_expense_claim, posting_date",
+										order_by = "posting_date DESC",
+										group_by = "posting_date",
+										limit_page_length = 7
+									 )
+		# fetchNetSales = frappe.db.sql("SELECT SUM(total_claimed_amount) as net_expense_claim, posting_date FROM `tabExpense Claim` WHERE employee LIKE '{}' AND company = '{}' AND approval_status='Approved' GROUP BY posting_date DESC LIMIT 7".format(employee,company),as_dict=1)
+		data['daily_net_expense_claim'] = fetchExpenseClaim
 
-	#employee advance
-	status = ['Draft','Unpaid','Claimed','Paid']
-	data['employee_advance'] = dict()
-	dataEA = data['employee_advance']
-	dataEA['count'] = dict()
-	dataCount = dataEA['count']
-	for stat in status:
-		fetch = frappe.db.sql("SELECT COUNT(name) FROM `tabEmployee Advance` WHERE status='{}' AND employee LIKE '{}' AND company = '{}' ORDER BY modified".format(stat,employee,company),as_list=1)
-		if (len(fetch) > 0):
-			firstFetch = fetch[0]
-			dataCount[stat] = firstFetch[0]
+		#leave application
+		status = ["Open","Approved"]
+		data['leave_application'] = dict()
+		dataLA = data['leave_application']
+		dataLA['count'] = dict()
+		dataCount = dataLA['count']
+		for stat in status:
+			fetch = frappe.db.sql("SELECT COUNT(name) FROM `tabLeave Application` WHERE status='{}' AND employee LIKE '{}' AND company = '{}' ORDER BY modified".format(stat,employee,company),as_list=1)
+			if (len(fetch) > 0):
+				firstFetch = fetch[0]
+				dataCount[stat] = firstFetch[0]
 
-	#expense claim
-	status = ['Draft','Unpaid','Paid']
-	data['expense_claim'] = dict()
-	dataEC = data['expense_claim']
-	dataEC['count'] = dict()
-	dataCount = dataEC['count']
-	for stat in status:
-		fetch = frappe.db.sql("SELECT COUNT(name) FROM `tabExpense Claim` WHERE status='{}' AND employee LIKE '{}' AND company = '{}' ORDER BY modified".format(stat,employee,company),as_list=1)
-		if (len(fetch) > 0):
-			firstFetch = fetch[0]
-			dataCount[stat] = firstFetch[0]
+		#employee advance
+		status = ['Draft','Unpaid','Claimed','Paid']
+		data['employee_advance'] = dict()
+		dataEA = data['employee_advance']
+		dataEA['count'] = dict()
+		dataCount = dataEA['count']
+		for stat in status:
+			fetch = frappe.db.sql("SELECT COUNT(name) FROM `tabEmployee Advance` WHERE status='{}' AND employee LIKE '{}' AND company = '{}' ORDER BY modified".format(stat,employee,company),as_list=1)
+			if (len(fetch) > 0):
+				firstFetch = fetch[0]
+				dataCount[stat] = firstFetch[0]
 
-	#sales order
+		#expense claim
+		status = ['Draft','Unpaid','Paid']
+		data['expense_claim'] = dict()
+		dataEC = data['expense_claim']
+		dataEC['count'] = dict()
+		dataCount = dataEC['count']
+		for stat in status:
+			fetch = frappe.db.sql("SELECT COUNT(name) FROM `tabExpense Claim` WHERE status='{}' AND employee LIKE '{}' AND company = '{}' ORDER BY modified".format(stat,employee,company),as_list=1)
+			if (len(fetch) > 0):
+				firstFetch = fetch[0]
+				dataCount[stat] = firstFetch[0]
 
-	status = ['Draft', 'To Deliver and Bill','To Bill','To Deliver','Completed','Cancelled','Closed']
+ 	else:
 
-	
 
-	data['sales_order'] = dict()
-	dataSO = data['sales_order']
-	dataSO['count'] = dict()
-	dataCount = dataSO['count']
-	for stat in status:
-		fetch = frappe.get_list("Sales Order", 
-							filters = 
-							{
-								"status": stat
-							})
-		dataCount[stat] = len(fetch)
+		#sales order
+		status = ['Draft', 'To Deliver and Bill','To Bill','To Deliver','Completed','Cancelled','Closed']
 
-	#invoice
-	status = ['Overdue','Unpaid','Paid']
-	data['invoice'] = dict()
-	dataINV = data['invoice']
-	dataINV['count'] = dict()
-	dataCount = dataINV['count']
-	for stat in status:
-		fetch = frappe.get_list("Sales Invoice", 
-							filters = 
-							{
-								"status": stat
-							})
-		dataCount[stat] = len(fetch)
-			
+		
 
-	#lead
-	status = ['Lead','Open','Replied','Opportunity','Interested','Quotation','Lost Quotation','Converted','Do Not Contact']
-	data['lead'] = dict()
-	dataLead = data['lead']
-	dataLead['count'] = dict()
-	dataCount = dataLead['count']
-	for stat in status:
-		fetch = frappe.get_list("Lead", 
-							filters = 
-							{
-								"status": stat
-							})
-		dataCount[stat] = len(fetch)
+		data['sales_order'] = dict()
+		dataSO = data['sales_order']
+		dataSO['count'] = dict()
+		dataCount = dataSO['count']
+		for stat in status:
+			fetch = frappe.get_list("Sales Order", 
+								filters = 
+								{
+									"status": stat
+								})
+			dataCount[stat] = len(fetch)
 
-	dataCount['Quotation'] += len(frappe.get_list("Quotation",filters = {"status": ("IN", ['Submitted','Open']),"quotation_to": "Customer"}))
-	dataCount['Converted'] += len(frappe.get_list("Quotation",filters = {"status": "Ordered","quotation_to": "Customer"}))
-	dataCount['Opportunity'] += len(frappe.get_list("Opportunity",filters = {"status": "Open","enquiry_from": "Customer"}))
+		#invoice
+		status = ['Overdue','Unpaid','Paid']
+		data['invoice'] = dict()
+		dataINV = data['invoice']
+		dataINV['count'] = dict()
+		dataCount = dataINV['count']
+		for stat in status:
+			fetch = frappe.get_list("Sales Invoice", 
+								filters = 
+								{
+									"status": stat
+								})
+			dataCount[stat] = len(fetch)
+				
+
+		#lead
+		status = ['Lead','Open','Replied','Opportunity','Interested','Quotation','Lost Quotation','Converted','Do Not Contact']
+		data['lead'] = dict()
+		dataLead = data['lead']
+		dataLead['count'] = dict()
+		dataCount = dataLead['count']
+		for stat in status:
+			fetch = frappe.get_list("Lead", 
+								filters = 
+								{
+									"status": stat
+								})
+			dataCount[stat] = len(fetch)
+
+		dataCount['Quotation'] += len(frappe.get_list("Quotation",filters = {"status": ("IN", ['Submitted','Open']),"quotation_to": "Customer"}))
+		dataCount['Converted'] += len(frappe.get_list("Quotation",filters = {"status": "Ordered","quotation_to": "Customer"}))
+		dataCount['Opportunity'] += len(frappe.get_list("Opportunity",filters = {"status": "Open","enquiry_from": "Customer"}))
  
- 	
 
-	#net sales
-	fetchNetSales = frappe.get_list("Sales Order", 
-									filters = {"status": ("IN", ["Open", "To Bill", "To Deliver", "To Deliver and Bill", "Completed"])},
-									fields = ["SUM(grand_total) as net_sales", "transaction_date as posting_date"],
-									order_by = "transaction_date DESC",
-									group_by = "transaction_date",
-									limit_page_length = 7
-								 )
-	data['daily_net_sales'] = fetchNetSales
+		#net sales
+		fetchNetSales = frappe.get_list("Sales Order", 
+										filters = {"status": ("IN", ["Open", "To Bill", "To Deliver", "To Deliver and Bill", "Completed"])},
+										fields = ["SUM(grand_total) as net_sales", "transaction_date as posting_date"],
+										order_by = "transaction_date DESC",
+										group_by = "transaction_date",
+										limit_page_length = 7
+									 )
+		data['daily_net_sales'] = fetchNetSales
 
 
-	fetchPrintFormat = frappe.db.sql("SELECT name, doc_type FROM `tabPrint Format` WHERE disabled = 0",as_dict=1)
+		fetchPrintFormat = frappe.db.sql("SELECT name, doc_type FROM `tabPrint Format` WHERE disabled = 0",as_dict=1)
 
-	data["print_format"] = fetchPrintFormat
+		data["print_format"] = fetchPrintFormat
 
 	return data
 
